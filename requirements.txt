@@ -15,7 +15,3 @@ slovnet==0.6.0
 sortedcontainers==2.4.0
 yargy==0.16.0
 
-aiogram==3.0.0b7
-psycopg2-binary
-python-dotenv
-aiohttp
