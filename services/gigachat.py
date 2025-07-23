@@ -8,7 +8,6 @@ class GigaChatService:
     def __init__(self):
         self.auth_url = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
         self.api_url = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
-        self.access_token: Optional[str] = None
         self.session: Optional[aiohttp.ClientSession] = None
         self.logger = logging.getLogger(__name__)
 
@@ -21,10 +20,10 @@ class GigaChatService:
         if self.session and not self.session.closed:
             await self.session.close()
 
-    async def _get_access_token(self) -> None:
-        """Получение токена доступа"""
+    async def _get_access_token(self) -> str:
+        """Получение нового токена доступа при каждом вызове"""
         try:
-            self.logger.info("⌛ Получаем токен GigaChat...")
+            self.logger.info("⌛ Получаем новый токен GigaChat...")
             
             if not self.session:
                 await self.initialize()
@@ -43,29 +42,31 @@ class GigaChatService:
                 ssl=False
             ) as response:
                 response.raise_for_status()
-                self.access_token = (await response.json())['access_token']
-                self.logger.info("✅ Токен успешно получен")
+                token = (await response.json())['access_token']
+                self.logger.info("✅ Новый токен успешно получен")
+                return token
 
         except Exception as e:
             self.logger.error(f"❌ Ошибка получения токена: {e}")
             raise
 
     async def ask(self, question: str) -> str:
-        """Запрос к GigaChat API"""
+        """Запрос к GigaChat API с новым токеном для каждого запроса"""
         try:
             if not self.session:
                 await self.initialize()
 
-            if not self.access_token:
-                await self._get_access_token()
+            # Получаем новый токен для каждого запроса
+            access_token = await self._get_access_token()
 
             headers = {
+                'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'Authorization': f'Bearer {self.access_token}'
+                'Authorization': f'Bearer {access_token}'
             }
 
             payload = {
-                "model": "GigaChat",
+                "model": "GigaChat-2-Max",
                 "messages": [
                     {
                         "role": "system",
@@ -76,7 +77,8 @@ class GigaChatService:
                         "content": question
                     }
                 ],
-                "temperature": 0.7  # Добавляем параметр для более детерминированных ответов
+                "temperature": 0.7,
+                "profanity_check": True
             }
 
             async with self.session.post(
